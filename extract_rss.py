@@ -187,3 +187,28 @@ for (dirpath, dirnames, filenames) in os.walk("."):
 news_df = pd.DataFrame(rss_aggregator.news_arr, columns = ["title", "desc", "link", "guid", "date", "source", "cat"])
 print(news_df.head())
 print(news_df.shape)
+
+"""
+We don't need that many categories, we can reduce them to 6:
+bus: business
+pol: politics
+tec: technology
+hea: health
+ent: entertainment, movies, art, style, fashion, lifestyle
+spo: sports
+"""
+fewer_cats = { 
+   'al': 'ent',
+   'mov': 'ent',
+   'a': 'ent',
+   's': 'ent',
+   'mlb': 'spo',
+   'nba': 'spo',
+   'ncf': 'spo',
+   'nfl': 'spo',
+   'nhl': 'spo',
+   'rpm': 'spo',
+   'soc': 'spo' }
+news_df = news_df.replace({ "cat": fewer_cats })
+news_df = news_df.drop(columns=["link", "guid", "date"])
+news_df.to_csv('news.csv', index=False)
