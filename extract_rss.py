@@ -114,10 +114,43 @@ def get_child_text(node, name):
    except StopIteration:
       return ""
 
+def merge_cat(prev_cat, new_cat):
+   """
+   Order: hea pol sci tec spo bus ent
+   hea > pol; health realted to politics => that's still about health (example: congressman dies of coronavirus; flu vaccine offered to people)
+   hea > ent; health related to entertainment => that's still about health
+   hea > spo; health related to sports => that's still about health (example: exercise)
+   hea > sci/tec; science/tech related to health => that's still about health (example: gene editing, fitness apps)
+   pol > bus; business realted to politics => that's still about politics (example: coronavirus aid; small business bailout)
+   pol > spo; sports realted to politics => that's still about politics (example: Trump playing golf)
+   pol > ent; entertainment realted to politics => that's still about politics (example: George Floyd art)
+   sci > tec; tech realted to science => that's still about science (example: mission to Mars)
+   ent > tec; tech realted to entertainment => that's still about tech (example: entertainment apps)
+   spo > ent; movie about sports => we'll categorize it as sports (example: a movie about hockey, football)
+   tec > bus; business realted to tech => that's still about tech (example: Apple, Ford release products)
+   bus > ent; business realted to entertainment => that's still about business (example: museum layoffs are about layoffs, not about art; Lord & Taylor bankruptcy is financial, not style)
+   business is a catch-all phrase, almost anything can be categorized as business, but business only really wins over entertainment, otherwise we could call everything a business
+   """
+   if new_cat == "hea" or prev_cat == "hea":
+      return "hea"
+   elif new_cat == "pol" or prev_cat == "pol":
+      return "pol"
+   elif new_cat == "sci" or prev_cat == "sci":
+      return "sci"
+   elif new_cat == "tec" or prev_cat == "tec":
+      return "tec"
+   elif (new_cat in ["spo", "mlb", "nba", "ncf", "nfl", "nhl", "rpm", "soc"]) or (prev_cat in ["spo", "mlb", "nba", "ncf", "nfl", "nhl", "rpm", "soc"]):
+      return "spo"
+   elif new_cat == "bus" or prev_cat == "bus":
+      return "bus"
+   else:
+      return "ent"
+
 class RSSAggregator:
    def __init__(self):
       self.news_arr = []
-      self.guids = set()
+      self.guids = dict() # key: guid string; value: new_arr index
+      self.guidsCats = dict() # key: guid string; value: set of catogories
 
    def read(self, pathname, source, cat):
       root = et.parse(pathname).getroot()
@@ -136,9 +169,22 @@ class RSSAggregator:
             date = get_child_text(item, "pubDate")
             #print(title + "; " + date)
             #print(desc)
-            if guid not in self.guids:
-               self.guids.add(guid)
+            if guid not in self.guidsCats.keys():
+               self.guidsCats[guid] = { cat }
+            else:
+               self.guidsCats[guid].add(cat)
+            if guid not in self.guids.keys():
+               self.guids[guid] = len(self.news_arr)
                self.news_arr.append([title, desc, link, guid, date, source, cat])
+            else:
+               index = self.guids[guid]
+               if self.news_arr[index][3] != guid:
+                  raise Exception("Internal index error")
+               old_cat = self.news_arr[index][6]
+               self.news_arr[index][6] = merge_cat(self.news_arr[index][6], cat)
+               new_cat = self.news_arr[index][6]
+               #if new_cat != old_cat:
+               #   print("%s > %s" % (new_cat, old_cat))
 
       elif root.tag == "{http://www.w3.org/2005/Atom}feed":
          channel_title = get_child_text(root, "{http://www.w3.org/2005/Atom}title")
@@ -153,9 +199,29 @@ class RSSAggregator:
             date = get_child_text(item, "{http://www.w3.org/2005/Atom}published")
             #print(title + "; " + date)
             #print(desc)
-            if guid not in self.guids:
-               self.guids.add(guid)
+            if guid not in self.guids.keys():
+               self.guids[guid] = len(self.news_arr)
                self.news_arr.append([title, desc, link, guid, date, source, cat])
+            else:
+               index = self.guids[guid]
+               if self.news_arr[index][3] != guid:
+                  raise Exception("Internal index error")
+               old_cat = self.news_arr[index][6]
+               self.news_arr[index][6] = merge_cat(self.news_arr[index][6], cat)
+               new_cat = self.news_arr[index][6]
+               #if new_cat != old_cat:
+               #   print("%s > %s" % (new_cat, old_cat))
+
+   def check_ambiguities(self):
+      # Ambiguity: the same article is classified as multiple categories
+      for guid, cats in self.guidsCats.items():
+         if len(cats) > 1:
+            cats_str = ""
+            for cat in cats:
+               if len(cats_str) > 0:
+                  cats_str += " "
+               cats_str += cat
+            print("Ambiguity: (%s)(%d)(%s)" % (guid, len(cats), cats_str));
 
 ################################################################################
 
@@ -173,6 +239,7 @@ for (dirpath, dirnames, filenames) in os.walk("."):
          cat = parts[1]
 
          rss_aggregator.read(pathname, source, cat)
+# rss_aggregator.check_ambiguities()
 
 #pathname = "bus/bbc-bus-072715.xml"
 #pathname = "ent/cnn-ent-072717.xml"
