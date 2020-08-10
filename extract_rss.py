@@ -28,7 +28,7 @@ class HtmlCleaner:
       # Eastern European, etc. Exceptions: de'ja' vu, cre'me, cliche', voila'
       if s == "":
          return s
-      s = self.re_tags.sub("", s) # remove tags
+      s = self.re_tags.sub(" ", s) # remove tags
       s = self.re_nbsp.sub(" ", s) # &nbsp; to space
       s = self.re_amp.sub("&", s) # &amp; to &
       s = self.re_lt.sub("<", s) # &lt; to <
